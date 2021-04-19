@@ -1,5 +1,4 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 
 import Data.Ord
@@ -191,6 +190,13 @@ instance (CardSet a, CardSet b) => EqOn (ConsecSet a b) CardContext where
 
 instance (CardSet a, CardSet b) => OrdOn (ConsecSet a b) CardContext where
   compareOn = compareSets
+
+-- (doesn't strictly need the Eq a, but I'm too lazy to implement this in a "better" way)
+trickWinner :: (Eq a, CardSet a, OrdOn a CardContext) => Maybe Suit -> CardNum -> [a] -> Int
+trickWinner tmpSuit tmpNum cards = fromJust $ elemIndex winner cards where
+  firstPlay = head cards
+  ctx = CardContext { firstSuit = cardSuit $ topCard firstPlay, trumpSuit = tmpSuit, trumpNum = tmpNum }
+  winner = foldl (maxOfL ctx) firstPlay cards
 
 
 main = return ()
