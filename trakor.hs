@@ -1,12 +1,12 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE UndecidableInstances #-}
 
 import Data.Ord
 import Data.Foldable
 import Data.Maybe
 import Data.List
+
 
 orderIf :: Bool -> Ordering -> Ordering
 orderIf True = id
@@ -15,6 +15,7 @@ orderIf False = const EQ
 allSame :: (Eq a) => [a] -> Bool
 allSame [] = True
 allSame (h:r) = and $ map (== h) r
+
 
 infix 4 ==.
 infix 4 /=.
@@ -56,6 +57,7 @@ class EqOn a b => OrdOn a b where
   maxOfR z x y
     | (x >. y) z  = x
     | otherwise   = y
+
 
 data Suit = Diamond | Club | Heart | Spade deriving (Eq, Show)
 type CardNum = Int
@@ -124,6 +126,7 @@ numPoints = applyToNum 0 f where
     | n == 5 = 5
     | n == 10 || n == king = 10
 
+
 compareCards :: Card -> Card -> CardContext -> Ordering
 compareCards (Joker _) (NormalCard _ _) _ = GT
 compareCards (NormalCard _ _) (Joker _) _ = LT
@@ -140,74 +143,54 @@ instance EqOn Card CardContext where
 instance OrdOn Card CardContext where
   compareOn = compareCards
 
+
 -- ie, a thing that gets played (single card, pair, tractor, and so on)
 class CardSet a where
   validSet :: CardContext -> a -> Bool
-  highestCard :: a -> Card -- only needs to give correct value if validSet is True
+  topCard :: a -> Card -- only needs to give correct value if validSet is True
   listCards   :: a -> [Card]
 
--- ie, a set of equivalent cards: pair, triple, and so on
--- every CardEqSet should be a CardSet but we don't do the (...) => ... thing
---   because we can auto derive CardSet from CardEqSet but not vice versa
-class CardEqSet a where
-  validEqSet :: a -> Bool
-  eqSetCard  :: a -> Card -- only needs to give correct value if validEqSet is True
-  listEqSetCards  :: a -> [Card]
-  validEqSet = allSame . listCards
+instance CardSet Card where
+  validSet = const $ const True
+  topCard = id
+  listCards = (:[])
 
-{-
-instance (CardEqSet a) => CardSet a where
-  validSet = const validEqSet
-  highestCard = eqSetCard
-  listCards = listEqSetCards
--}
 
-instance CardEqSet Card where
-  eqSetCard = id
-  listEqSetCards = return
+-- a set where every card has to be the same; ie pair, triple, etc
+data EqSet a b = EqSet { fstEq :: a, sndEq :: b }
+type Pair = EqSet Card Card
+type Triple = EqSet Card Pair
 
--- equal set append
-data EqSetApp a = EqSetApp Card a
-type Pair = EqSetApp Card
-type Triple = EqSetApp Pair
+instance (CardSet a, CardSet b) => CardSet (EqSet a b) where
+  validSet ctx (EqSet x y) = validSet ctx x && validSet ctx y && topCard x == topCard y
+  topCard = topCard . fstEq
+  listCards x = (listCards $ fstEq x) ++ (listCards $ sndEq x)
 
-instance (CardEqSet a) => CardEqSet (EqSetApp a) where
-  eqSetCard (EqSetApp h _) = h
-  listEqSetCards (EqSetApp h r) = h:(listCards r)
+compareSets :: (CardSet a) => a -> a -> CardContext -> Ordering
+compareSets x y ctx = orderIf (validSet ctx x || validSet ctx y) $ (comparing (validSet ctx) x y) <> (compareOn (topCard x) (topCard y) ctx)
 
-compareEqSetApps :: (CardEqSet a) => (EqSetApp a) -> (EqSetApp a) -> CardContext -> Ordering
-compareEqSetApps x@(EqSetApp a _) y@(EqSetApp b _) ctx = orderIf (validEqSet x || validEqSet y) $ (comparing validEqSet x y) <> (compareOn a b ctx)
+instance (CardSet a, CardSet b) => EqOn (EqSet a b) CardContext where
+  (==.) a b c = compareSets a b c == EQ
 
-instance (CardEqSet a) => EqOn (EqSetApp a) CardContext where
-  (==.) a b c = compareEqSetApps a b c == EQ
+instance (CardSet a, CardSet b) => OrdOn (EqSet a b) CardContext where
+  compareOn = compareSets
 
-instance (CardEqSet a) => OrdOn (EqSetApp a) CardContext where
-  compareOn = compareEqSetApps
 
-data Tractor a b = Tractor a b
-type NormalTractor = Tractor Pair Pair
+-- a set where the top card of the left branch has to come immediately after the top card of the right branch;
+--   ie tractors
+data ConsecSet a b = ConsecSet { fstConsec :: a, sndConsec :: b }
+type NormalTractor = ConsecSet Pair Pair
 
-instance (CardEqSet a, CardSet b) => CardSet (Tractor a b) where
-  validSet c (Tractor x y) = validEqSet x && validSet c y && consecutiveCards c (highestCard x) (highestCard y)
-  highestCard (Tractor x y) = highestCard x
-  listCards (Tractor x y) = listCards x ++ listCards y
+instance (CardSet a, CardSet b) => CardSet (ConsecSet a b) where
+  validSet ctx (ConsecSet x y) = validSet ctx x && validSet ctx y && consecutiveCards ctx (topCard x) (topCard y)
+  topCard = topCard . fstConsec
+  listCards x = (listCards $ fstConsec x) ++ (listCards $ sndConsec x)
 
-compareTractors :: (CardEqSet a, CardSet b) => Tractor a b -> Tractor a b -> CardContext -> Ordering
-compareTractors x y ctx = orderIf (validEqSet x || validSet ctx y) $ (comparing (validSet ctx) x y) <> (compareOn (highestCard x) (highestCard y) ctx)
+instance (CardSet a, CardSet b) => EqOn (ConsecSet a b) CardContext where
+  (==.) a b c = compareSets a b c == EQ
 
-instance (CardEqSet a, CardSet b, EqOn a CardContext, EqOn b CardContext) => EqOn (Tractor a b) CardContext where
-  (==.) a b c = compareTractors a b c == EQ
-
-instance (CardEqSet a, CardSet b, OrdOn a CardContext, OrdOn b CardContext) => OrdOn (Tractor a b) CardContext where
-  compareOn = compareTractors
-
--- (doesn't strictly need the Eq a, but I'm too lazy to implement this in a "better" way)
-trickWinner :: (Eq a, CardSet a, OrdOn a CardContext) => Maybe Suit -> CardNum -> [a] -> Int
-trickWinner tmpSuit tmpNum cards = fromJust $ elemIndex winner cards where
-  firstPlay = head cards
-  ctx = CardContext { firstSuit = cardSuit $ highestCard firstPlay, trumpSuit = tmpSuit, trumpNum = tmpNum }
-  winner = foldl (maxOfL ctx) firstPlay cards
-
+instance (CardSet a, CardSet b) => OrdOn (ConsecSet a b) CardContext where
+  compareOn = compareSets
 
 
 main = return ()
