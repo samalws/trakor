@@ -61,7 +61,7 @@ class EqOn a b => OrdOn a b where
 data Suit = Diamond | Club | Heart | Spade deriving (Eq, Show)
 type CardNum = Int
 data Card = NormalCard { cardSuit :: Suit, cardNum :: CardNum } | Joker { bigJoker :: Bool } deriving (Eq, Show)
-data CardContext = CardContext { firstSuit :: Suit, trumpSuit :: Maybe Suit, trumpNum :: CardNum } deriving (Eq, Show)
+data CardContext = CardContext { firstSuit :: Maybe Suit, trumpSuit :: Maybe Suit, trumpNum :: CardNum } deriving (Eq, Show)
 
 jack :: CardNum
 jack = 11
@@ -101,7 +101,7 @@ trumpNumValue ctx card
 suitValue :: CardContext -> Card -> Int
 suitValue ctx card
   | isTrump ctx card = 2
-  | firstSuit ctx == cardSuit card = 1
+  | firstSuit ctx == Just (cardSuit card) = 1
   | otherwise = 0
 
 -- first argument card comes AFTER second argument card, ie is greater than
@@ -156,7 +156,7 @@ instance CardSet Card where
 
 
 -- a set where every card has to be the same; ie pair, triple, etc
-data EqSet a b = EqSet { fstEq :: a, sndEq :: b }
+data EqSet a b = EqSet { fstEq :: a, sndEq :: b } deriving (Eq, Show)
 type Pair = EqSet Card Card
 type Triple = EqSet Card Pair
 
@@ -177,7 +177,7 @@ instance (CardSet a, CardSet b) => OrdOn (EqSet a b) CardContext where
 
 -- a set where the top card of the left branch has to come immediately after the top card of the right branch;
 --   ie tractors
-data ConsecSet a b = ConsecSet { fstConsec :: a, sndConsec :: b }
+data ConsecSet a b = ConsecSet { fstConsec :: a, sndConsec :: b } deriving (Eq, Show)
 type NormalTractor = ConsecSet Pair Pair
 
 instance (CardSet a, CardSet b) => CardSet (ConsecSet a b) where
@@ -193,9 +193,9 @@ instance (CardSet a, CardSet b) => OrdOn (ConsecSet a b) CardContext where
 
 -- (doesn't strictly need the Eq a, but I'm too lazy to implement this in a "better" way)
 trickWinner :: (Eq a, CardSet a, OrdOn a CardContext) => Maybe Suit -> CardNum -> [a] -> Int
-trickWinner tmpSuit tmpNum cards = fromJust $ elemIndex winner cards where
+trickWinner trmpSuit trmpNum cards = fromJust $ elemIndex winner cards where
   firstPlay = head cards
-  ctx = CardContext { firstSuit = cardSuit $ topCard firstPlay, trumpSuit = tmpSuit, trumpNum = tmpNum }
+  ctx = CardContext { firstSuit = maybeSuit $ topCard firstPlay, trumpSuit = trmpSuit, trumpNum = trmpNum }
   winner = foldl (maxOfL ctx) firstPlay cards
 
 
