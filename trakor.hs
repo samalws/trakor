@@ -135,11 +135,11 @@ numPoints = applyToNum 0 f where
 
 
 compareCards :: Card -> Card -> CardContext -> Ordering
-compareCards a b ctx = orderIf notWorthless $ fold [c0,c1,c2,c3] where
-  c0 = comparing maybeBig a b
-  c1 = comparing (suitValue ctx) a b
-  c2 = comparing (trumpNumValue $ trumpCtx ctx) a b
-  c3 = comparing maybeNum a b
+compareCards a b ctx = orderIf notWorthless $ fold $ map (($ b) . ($ a)) $ [c0,c1,c2,c3] where
+  c0 = comparing maybeBig
+  c1 = comparing (suitValue ctx)
+  c2 = comparing (trumpNumValue $ trumpCtx ctx)
+  c3 = comparing maybeNum
   notWorthless = suitValue ctx a /= 0 || suitValue ctx b /= 0
 
 instance EqOn Card CardContext where
