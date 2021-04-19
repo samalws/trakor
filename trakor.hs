@@ -201,10 +201,10 @@ instance (CardSet a, CardSet b) => OrdOn (ConsecSet a b) CardContext where
   compareOn = compareSets
 
 -- (doesn't strictly need the Eq a, but I'm too lazy to implement this in a "better" way)
-trickWinner :: (Eq a, CardSet a, OrdOn a CardContext) => Maybe Suit -> CardNum -> [a] -> Int
-trickWinner trmpSuit trmpNum cards = fromJust $ elemIndex winner cards where
+trickWinner :: (Eq a, CardSet a, OrdOn a CardContext) => TrumpContext -> [a] -> Int
+trickWinner trumpContext cards = fromJust $ elemIndex winner cards where
   firstPlay = head cards
-  ctx = CardContext { firstSuit = maybeSuit $ topCard firstPlay, trumpCtx = TrumpContext { trumpSuit = trmpSuit, trumpNum = trmpNum } }
+  ctx = CardContext { firstSuit = maybeSuit $ topCard firstPlay, trumpCtx = trumpContext }
   winner = foldl (maxOfL ctx) firstPlay cards
 
 
