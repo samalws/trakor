@@ -61,7 +61,8 @@ class EqOn a b => OrdOn a b where
 data Suit = Diamond | Club | Heart | Spade deriving (Eq, Show)
 type CardNum = Int
 data Card = NormalCard { cardSuit :: Suit, cardNum :: CardNum } | Joker { bigJoker :: Bool } deriving (Eq, Show)
-data CardContext = CardContext { firstSuit :: Maybe Suit, trumpSuit :: Maybe Suit, trumpNum :: CardNum } deriving (Eq, Show)
+data TrumpContext = TrumpContext { trumpSuit :: Maybe Suit, trumpNum :: CardNum } deriving (Eq, Show)
+data CardContext = CardContext { firstSuit :: Maybe Suit, trumpCtx :: TrumpContext } deriving (Eq, Show)
 
 jack :: CardNum
 jack = 11
@@ -80,17 +81,24 @@ maybeNum :: Card -> Maybe CardNum
 maybeNum (Joker _) = Nothing
 maybeNum a = Just $ cardNum a
 
+maybeBig :: Card -> Maybe Bool
+maybeBig (Joker a) = Just a
+maybeBig _ = Nothing
+
 applyToSuit :: a -> (Suit -> a) -> Card -> a
 applyToSuit d f = maybe d f . maybeSuit
 
 applyToNum :: a -> (CardNum -> a) -> Card -> a
 applyToNum d f = maybe d f . maybeNum
 
-isTrump :: CardContext -> Card -> Bool
+applyToBig :: a -> (Bool -> a) -> Card -> a
+applyToBig d f = maybe d f . maybeBig
+
+isTrump :: TrumpContext -> Card -> Bool
 isTrump ctx a = (applyToNum True (== trumpNum ctx) a) || (maybeSuit a == trumpSuit ctx)
 
 -- 2 if big number, big suit; 1 if big number, not big suit; 0 otherwise
-trumpNumValue :: CardContext -> Card -> Int
+trumpNumValue :: TrumpContext -> Card -> Int
 trumpNumValue _ (Joker _) = 0
 trumpNumValue ctx card
   | trumpNum ctx /= cardNum card = 0
@@ -100,12 +108,12 @@ trumpNumValue ctx card
 -- 2 if trump suit; 1 if same suit as firstSuit; 0 otherwise
 suitValue :: CardContext -> Card -> Int
 suitValue ctx card
-  | isTrump ctx card = 2
+  | isTrump (trumpCtx ctx) card = 2
   | firstSuit ctx == Just (cardSuit card) = 1
   | otherwise = 0
 
 -- first argument card comes AFTER second argument card, ie is greater than
-consecutiveCards :: CardContext -> Card -> Card -> Bool
+consecutiveCards :: TrumpContext -> Card -> Card -> Bool
 consecutiveCards _ (Joker a) (Joker b) = a > b
 consecutiveCards _ (NormalCard _ _) (Joker _) = False
 consecutiveCards ctx a@(Joker _) b@(NormalCard _ _) = not (bigJoker a) && trumpNumValue ctx b == 2
@@ -127,13 +135,11 @@ numPoints = applyToNum 0 f where
 
 
 compareCards :: Card -> Card -> CardContext -> Ordering
-compareCards (Joker _) (NormalCard _ _) _ = GT
-compareCards (NormalCard _ _) (Joker _) _ = LT
-compareCards (Joker a) (Joker b) _ = compare a b
-compareCards a@(NormalCard _ _) b@(NormalCard _ _) ctx = orderIf notWorthless $ fold [c1,c2,c3] where
+compareCards a b ctx = orderIf notWorthless $ fold [c0,c1,c2,c3] where
+  c0 = comparing maybeBig a b
   c1 = comparing (suitValue ctx) a b
-  c2 = comparing (trumpNumValue ctx) a b
-  c3 = comparing cardNum a b
+  c2 = comparing (trumpNumValue $ trumpCtx ctx) a b
+  c3 = comparing maybeNum a b
   notWorthless = suitValue ctx a /= 0 || suitValue ctx b /= 0
 
 instance EqOn Card CardContext where
@@ -145,7 +151,7 @@ instance OrdOn Card CardContext where
 
 -- ie, a thing that gets played (single card, pair, tractor, and so on)
 class CardSet a where
-  validSet :: CardContext -> a -> Bool
+  validSet :: TrumpContext -> a -> Bool
   topCard :: a -> Card -- only needs to give correct value if validSet is True
   listCards   :: a -> [Card]
 
@@ -166,7 +172,10 @@ instance (CardSet a, CardSet b) => CardSet (EqSet a b) where
   listCards x = (listCards $ fstEq x) ++ (listCards $ sndEq x)
 
 compareSets :: (CardSet a) => a -> a -> CardContext -> Ordering
-compareSets x y ctx = orderIf (validSet ctx x || validSet ctx y) $ (comparing (validSet ctx) x y) <> (compareOn (topCard x) (topCard y) ctx)
+compareSets x y ctx = orderIf (vstc x || vstc y) $ c0 <> c1 where
+  c0 = comparing vstc x y
+  c1 = compareOn (topCard x) (topCard y) ctx
+  vstc = validSet (trumpCtx ctx)
 
 instance (CardSet a, CardSet b) => EqOn (EqSet a b) CardContext where
   (==.) a b c = compareSets a b c == EQ
@@ -195,7 +204,7 @@ instance (CardSet a, CardSet b) => OrdOn (ConsecSet a b) CardContext where
 trickWinner :: (Eq a, CardSet a, OrdOn a CardContext) => Maybe Suit -> CardNum -> [a] -> Int
 trickWinner trmpSuit trmpNum cards = fromJust $ elemIndex winner cards where
   firstPlay = head cards
-  ctx = CardContext { firstSuit = maybeSuit $ topCard firstPlay, trumpSuit = trmpSuit, trumpNum = trmpNum }
+  ctx = CardContext { firstSuit = maybeSuit $ topCard firstPlay, trumpCtx = TrumpContext { trumpSuit = trmpSuit, trumpNum = trmpNum } }
   winner = foldl (maxOfL ctx) firstPlay cards
 
 
