@@ -15,6 +15,10 @@ allSame :: (Eq a) => [a] -> Bool
 allSame [] = True
 allSame (h:r) = and $ map (== h) r
 
+firstNonEmpty :: [[a]] -> [a]
+firstNonEmpty ([]:r) = firstNonEmpty r
+firstNonEmpty (h:r) = h
+
 
 infix 4 ==.
 infix 4 /=.
@@ -97,6 +101,9 @@ applyToBig d f = maybe d f . maybeBig
 isTrump :: TrumpContext -> Card -> Bool
 isTrump ctx a = (applyToNum True (== trumpNum ctx) a) || (maybeSuit a == trumpSuit ctx)
 
+firstCardTrump :: CardContext -> Bool
+firstCardTrump ctx = firstSuit ctx == trumpSuit (trumpCtx ctx) || firstSuit ctx == Nothing
+
 -- 2 if big number, big suit; 1 if big number, not big suit; 0 otherwise
 trumpNumValue :: TrumpContext -> Card -> Int
 trumpNumValue _ (Joker _) = 0
@@ -105,10 +112,10 @@ trumpNumValue ctx card
   | trumpSuit ctx /= Just (cardSuit card) = 1
   | otherwise = 2
 
--- 2 if trump suit; 1 if same suit as firstSuit; 0 otherwise
+-- 1 if same suit as firstSuit (including trump); 2 if trump suit; 0 otherwise
 suitValue :: CardContext -> Card -> Int
 suitValue ctx card
-  | isTrump (trumpCtx ctx) card = 2
+  | isTrump (trumpCtx ctx) card = if (firstCardTrump ctx) then 1 else 2
   | firstSuit ctx == Just (cardSuit card) = 1
   | otherwise = 0
 
@@ -153,21 +160,27 @@ instance OrdOn Card CardContext where
 class CardSet a where
   validSet :: TrumpContext -> a -> Bool
   topCard :: a -> Card -- only needs to give correct value if validSet is True
-  listCards   :: a -> [Card]
+  listCards :: a -> [Card]
+  playableCards :: CardContext -> [Card] -> [a]
+
+playableSingleCards :: CardContext -> [Card] -> [Card]
+playableSingleCards ctx hand = firstNonEmpty [filter ((== 1) . suitValue ctx) hand, hand]
 
 instance CardSet Card where
   validSet = const $ const True
   topCard = id
   listCards = (:[])
+  playableCards = playableSingleCards
 
 
 -- a set where every card has to be the same; ie pair, triple, etc
-data EqSet a b = EqSet { fstEq :: a, sndEq :: b } deriving (Eq, Show)
-type Pair = EqSet Card Card
-type Triple = EqSet Card Pair
+data EqSet b = EqSet { fstEq :: Card, sndEq :: b } deriving (Eq, Show)
+type Pair = EqSet Card
+type Triple = EqSet Pair
 
-instance (CardSet a, CardSet b) => CardSet (EqSet a b) where
-  validSet ctx (EqSet x y) = validSet ctx x && validSet ctx y && topCard x == topCard y
+instance (CardSet b) => CardSet (EqSet b) where
+  validSet = const $ allSame . listCards
+  -- validSet ctx (EqSet x y) = validSet ctx x && validSet ctx y && topCard x == topCard y
   topCard = topCard . fstEq
   listCards x = (listCards $ fstEq x) ++ (listCards $ sndEq x)
 
@@ -177,10 +190,10 @@ compareSets x y ctx = orderIf (vstc x || vstc y) $ c0 <> c1 where
   c1 = compareOn (topCard x) (topCard y) ctx
   vstc = validSet (trumpCtx ctx)
 
-instance (CardSet a, CardSet b) => EqOn (EqSet a b) CardContext where
+instance (CardSet b) => EqOn (EqSet b) CardContext where
   (==.) a b c = compareSets a b c == EQ
 
-instance (CardSet a, CardSet b) => OrdOn (EqSet a b) CardContext where
+instance (CardSet b) => OrdOn (EqSet b) CardContext where
   compareOn = compareSets
 
 
