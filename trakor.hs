@@ -241,12 +241,15 @@ trickWinner trumpContext played = fromJust $ elemIndex winner played where
   ctx = CardContext { firstSuit = maybeSuit $ topCard firstPlay, trumpCtx = trumpContext }
   winner = foldl (maxOfL ctx) firstPlay played
 
-validTrick :: (Eq a, CardSet a) => TrumpContext -> [[Card]] -> [a] -> Bool
-validTrick trumpContext hands played = firstPlayValid && allPlaysValid where
+validTrick :: (Eq a, CardSet a) => TrumpContext -> [a] -> [[Card]] -> Bool
+validTrick trumpContext played hands = firstPlayValid && allPlaysValid where
   firstPlay = head played
   ctx = CardContext { firstSuit = maybeSuit $ topCard firstPlay, trumpCtx = trumpContext }
   firstPlayValid = validSet trumpContext firstPlay
   allPlaysValid = and $ map (uncurry $ canPlayOn ctx) $ zip hands played
+
+handsAfterTrick :: (Eq a, CardSet a) => [a] -> [[Card]] -> [[Card]]
+handsAfterTrick played hands = map (uncurry removeFromList) $ zip (map listCards played) hands
 
 
 main = return ()
