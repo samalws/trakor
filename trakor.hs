@@ -23,6 +23,18 @@ removeFromList :: (Eq a) => [a] -> [a] -> [a]
 removeFromList [] l = l
 removeFromList (h:r) l = removeFromList r $ delete h l
 
+rotateList :: Int -> [a] -> [a]
+rotateList n l = take (length l) $ drop n $ cycle l
+
+modifyAt :: Int -> (a -> a) -> [a] -> [a]
+modifyAt i f ls
+  | i < 0 = ls
+  | otherwise = go i ls
+  where
+    go 0 (x:xs) = f x : xs
+    go n (x:xs) = x : go (n-1) xs
+    go _ []     = []
+
 
 infix 4 ==.
 infix 4 /=.
@@ -251,5 +263,19 @@ validTrick trumpContext played hands = firstPlayValid && allPlaysValid where
 handsAfterTrick :: (Eq a, CardSet a) => [a] -> [[Card]] -> [[Card]]
 handsAfterTrick played hands = map (uncurry removeFromList) $ zip (map listCards played) hands
 
+pointsInTrick :: (CardSet a) => [a] -> CardNum
+pointsInTrick = sum . map numPoints . concat . map listCards
+
+addPointsForTrick :: (Eq a, CardSet a, OrdOn a CardContext) => TrumpContext -> [a] -> [CardNum] -> [CardNum]
+addPointsForTrick tc played pts = modifyAt (trickWinner tc played) (+ (pointsInTrick played)) pts
+
+rotateListAfterTrick :: (Eq a, CardSet a, OrdOn a CardContext) => TrumpContext -> [a] -> [b] -> [b]
+rotateListAfterTrick tc played = rotateList $ trickWinner tc played
+
+rotatedHandAfterTrick :: (Eq a, CardSet a, OrdOn a CardContext) => TrumpContext -> [a] -> [[Card]] -> [[Card]]
+rotatedHandAfterTrick tc played = rotateListAfterTrick tc played . handsAfterTrick played
+
+rotatedPointsAfterTrick :: (Eq a, CardSet a, OrdOn a CardContext) => TrumpContext -> [a] -> [CardNum] -> [CardNum]
+rotatedPointsAfterTrick tc played pts = rotateListAfterTrick tc played $ addPointsForTrick tc played pts
 
 main = return ()
