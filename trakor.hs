@@ -178,11 +178,21 @@ data EqSet b = EqSet { fstEq :: Card, sndEq :: b } deriving (Eq, Show)
 type Pair = EqSet Card
 type Triple = EqSet Pair
 
+-- TODO: this makes it so you have to break triples
+playableEqSets :: (CardSet b) => CardContext -> [Card] -> [EqSet b]
+playableEqSets ctx hand = firstNonEmpty [filter validSet sets, sets] where
+  sets :: [EqSet b]
+  sets = do
+    tailPart <- playableSets ctx hand
+    headPart <- playableSets ctx $ removeFromHand (listCards tailPart) hand
+    return (EqSet headPart tailPart)
+
 instance (CardSet b) => CardSet (EqSet b) where
   validSet = const $ allSame . listCards
   -- validSet ctx (EqSet x y) = validSet ctx x && validSet ctx y && topCard x == topCard y
   topCard = topCard . fstEq
   listCards x = (listCards $ fstEq x) ++ (listCards $ sndEq x)
+  playableSets = playableEqSets
 
 compareSets :: (CardSet a) => a -> a -> CardContext -> Ordering
 compareSets x y ctx = orderIf (vstc x || vstc y) $ c0 <> c1 where
@@ -202,10 +212,21 @@ instance (CardSet b) => OrdOn (EqSet b) CardContext where
 data ConsecSet a b = ConsecSet { fstConsec :: a, sndConsec :: b } deriving (Eq, Show)
 type NormalTractor = ConsecSet Pair Pair
 
+-- TODO: have to append things onto ConsecSet in the right order for this to work properly
+--  something like EqSet : (EqSet : ...)
+playableConsecSets :: (CardSet a, CardSet b) => CardContext -> [Card] -> [ConsecSet a b]
+playableConsecSets ctx hand = firstNonEmpty [filter validSet sets, sets] where
+  sets :: [ConsecSet a b]
+  sets = do
+    tailPart <- playableSets ctx hand
+    headPart <- playableSets ctx $ removeFromHand (listCards tailPart) hand
+    return (ConsecSet headPart tailPart)
+
 instance (CardSet a, CardSet b) => CardSet (ConsecSet a b) where
   validSet ctx (ConsecSet x y) = validSet ctx x && validSet ctx y && consecutiveCards ctx (topCard x) (topCard y)
   topCard = topCard . fstConsec
   listCards x = (listCards $ fstConsec x) ++ (listCards $ sndConsec x)
+  playableSets = playableConsecSets
 
 instance (CardSet a, CardSet b) => EqOn (ConsecSet a b) CardContext where
   (==.) a b c = compareSets a b c == EQ
