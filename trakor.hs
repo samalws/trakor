@@ -167,6 +167,9 @@ class CardSet a where
   listCards :: a -> [Card]
   playableSets :: CardContext -> [Card] -> [a]
 
+canPlayOn :: (CardSet a, Eq a) => CardContext -> [Card] -> a -> Bool
+canPlayOn ctx hand play = elem play $ playableSets ctx hand
+
 playableSingleCards :: CardContext -> [Card] -> [Card]
 playableSingleCards ctx hand = firstNonEmpty [filter ((== 1) . suitValue ctx) hand, hand]
 
@@ -233,10 +236,17 @@ instance (CardSet a, CardSet b) => OrdOn (ConsecSet a b) CardContext where
 
 -- (doesn't strictly need the Eq a, but I'm too lazy to implement this in a "better" way)
 trickWinner :: (Eq a, CardSet a, OrdOn a CardContext) => TrumpContext -> [a] -> Int
-trickWinner trumpContext cards = fromJust $ elemIndex winner cards where
-  firstPlay = head cards
+trickWinner trumpContext played = fromJust $ elemIndex winner played where
+  firstPlay = head played
   ctx = CardContext { firstSuit = maybeSuit $ topCard firstPlay, trumpCtx = trumpContext }
-  winner = foldl (maxOfL ctx) firstPlay cards
+  winner = foldl (maxOfL ctx) firstPlay played
+
+validTrick :: (Eq a, CardSet a) => TrumpContext -> [[Card]] -> [a] -> Bool
+validTrick trumpContext hands played = firstPlayValid && allPlaysValid where
+  firstPlay = head played
+  ctx = CardContext { firstSuit = maybeSuit $ topCard firstPlay, trumpCtx = trumpContext }
+  firstPlayValid = validSet trumpContext firstPlay
+  allPlaysValid = and $ map (uncurry $ canPlayOn ctx) $ zip hands played
 
 
 main = return ()
