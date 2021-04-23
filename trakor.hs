@@ -19,6 +19,10 @@ firstNonEmpty :: [[a]] -> [a]
 firstNonEmpty ([]:r) = firstNonEmpty r
 firstNonEmpty (h:r) = h
 
+removeFromList :: (Eq a) => [a] -> [a] -> [a]
+removeFromList [] l = l
+removeFromList (h:r) l = removeFromList r $ delete h l
+
 
 infix 4 ==.
 infix 4 /=.
@@ -161,7 +165,7 @@ class CardSet a where
   validSet :: TrumpContext -> a -> Bool
   topCard :: a -> Card -- only needs to give correct value if validSet is True
   listCards :: a -> [Card]
-  playableCards :: CardContext -> [Card] -> [a]
+  playableSets :: CardContext -> [Card] -> [a]
 
 playableSingleCards :: CardContext -> [Card] -> [Card]
 playableSingleCards ctx hand = firstNonEmpty [filter ((== 1) . suitValue ctx) hand, hand]
@@ -170,7 +174,7 @@ instance CardSet Card where
   validSet = const $ const True
   topCard = id
   listCards = (:[])
-  playableCards = playableSingleCards
+  playableSets = playableSingleCards
 
 
 -- a set where every card has to be the same; ie pair, triple, etc
@@ -179,11 +183,10 @@ type Pair = EqSet Card
 type Triple = EqSet Pair
 
 playableMultiSets :: (CardSet a, CardSet b, CardSet c) => (a -> b -> c) -> CardContext -> [Card] -> [c]
-playableMultiSets constructor ctx hand = firstNonEmtpy [filter validSet sets, sets] where
-  sets :: [c]
+playableMultiSets constructor ctx hand = firstNonEmpty [filter (validSet $ trumpCtx ctx) sets, sets] where
   sets = do
     tailPart <- playableSets ctx hand
-    headPart <- playableSets ctx $ removeFromHand (listCards tailPart) hand
+    headPart <- playableSets ctx $ removeFromList (listCards tailPart) hand
     return $ constructor headPart tailPart
 
 instance (CardSet b) => CardSet (EqSet b) where
@@ -213,6 +216,8 @@ type NormalTractor = ConsecSet Pair Pair
 
 -- TODO: have to append things onto ConsecSet in the right order for this to work properly
 --  something like EqSet : (EqSet : ...)
+
+-- it does this correctly but note to future self: you *do* have to break up triple tractors if a normal tractor is played
 
 instance (CardSet a, CardSet b) => CardSet (ConsecSet a b) where
   validSet ctx (ConsecSet x y) = validSet ctx x && validSet ctx y && consecutiveCards ctx (topCard x) (topCard y)
