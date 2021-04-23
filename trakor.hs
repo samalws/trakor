@@ -269,13 +269,27 @@ pointsInTrick = sum . map numPoints . concat . map listCards
 addPointsForTrick :: (Eq a, CardSet a, OrdOn a CardContext) => TrumpContext -> [a] -> [CardNum] -> [CardNum]
 addPointsForTrick tc played pts = modifyAt (trickWinner tc played) (+ (pointsInTrick played)) pts
 
-rotateListAfterTrick :: (Eq a, CardSet a, OrdOn a CardContext) => TrumpContext -> [a] -> [b] -> [b]
-rotateListAfterTrick tc played = rotateList $ trickWinner tc played
+rotatedListAfterTrick :: (Eq a, CardSet a, OrdOn a CardContext) => TrumpContext -> [a] -> [b] -> [b]
+rotatedListAfterTrick tc played = rotateList $ trickWinner tc played
 
-rotatedHandAfterTrick :: (Eq a, CardSet a, OrdOn a CardContext) => TrumpContext -> [a] -> [[Card]] -> [[Card]]
-rotatedHandAfterTrick tc played = rotateListAfterTrick tc played . handsAfterTrick played
+rotatedHandsAfterTrick :: (Eq a, CardSet a, OrdOn a CardContext) => TrumpContext -> [a] -> [[Card]] -> [[Card]]
+rotatedHandsAfterTrick tc played = rotatedListAfterTrick tc played . handsAfterTrick played
 
 rotatedPointsAfterTrick :: (Eq a, CardSet a, OrdOn a CardContext) => TrumpContext -> [a] -> [CardNum] -> [CardNum]
-rotatedPointsAfterTrick tc played pts = rotateListAfterTrick tc played $ addPointsForTrick tc played pts
+rotatedPointsAfterTrick tc played pts = rotatedListAfterTrick tc played $ addPointsForTrick tc played pts
+
+data GameState plrType = GameState { gamePlayers :: [plrType], gameHands :: [[Card]], gameTrumpCtx :: TrumpContext, gamePoints :: [CardNum] }
+
+applyTrickToGameState :: (Eq a, CardSet a, OrdOn a CardContext) => [a] -> GameState b -> Maybe (GameState b)
+applyTrickToGameState played gs = if valid then Just result else Nothing where
+  plrs = gamePlayers gs
+  hands = gameHands gs
+  tc = gameTrumpCtx gs
+  pts = gamePoints gs
+  valid = validTrick tc played hands
+  result = GameState { gamePlayers = rPlrs, gameHands = rHands, gameTrumpCtx = tc, gamePoints = rPts }
+  rPlrs = rotatedListAfterTrick tc played plrs
+  rHands = rotatedHandsAfterTrick tc played hands
+  rPts = rotatedPointsAfterTrick tc played pts
 
 main = return ()
